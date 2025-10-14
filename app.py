@@ -1,65 +1,34 @@
-from flask import Flask, request, jsonify, render_template
-from TicTacToeVSBot import board, best_move, is_winner, is_board_full
-import math
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from werkzeug.security import generate_password_hash, check_password_hash
+from tictactoevsbot import board, best_move, is_winner, is_board_full
+import sqlite3
 
 app = Flask(__name__)
+app.secret_key = "your_secret_key"
 
-board = [' ' for _ in range(9)]
+# ------------------------
+# User authentication DB
+# ------------------------
+conn = sqlite3.connect('users.db')
+c = conn.cursor()
+c.execute('''
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY,
+    username TEXT UNIQUE,
+    password TEXT,
+    score INTEGER DEFAULT 0
+)
+''')
+conn.commit()
+conn.close()
 
-def is_winner(player):
-    win_conditions = [
-        [0,1,2],[3,4,5],[6,7,8],
-        [0,3,6],[1,4,7],[2,5,8],
-        [0,4,8],[2,4,6]
-    ]
-    for condition in win_conditions:
-        if board[condition[0]] == board[condition[1]] == board[condition[2]] == player:
-            return True
-    return False
-
-def is_board_full():
-    return ' ' not in board
-
-def minimax(is_maximizing):
-    if is_winner('O'): return 1
-    elif is_winner('X'): return -1
-    elif is_board_full(): return 0
-
-    if is_maximizing:
-        best_score = -math.inf
-        for i in range(9):
-            if board[i] == ' ':
-                board[i] = 'O'
-                score = minimax(False)
-                board[i] = ' '
-                best_score = max(score, best_score)
-        return best_score
-    else:
-        best_score = math.inf
-        for i in range(9):
-            if board[i] == ' ':
-                board[i] = 'X'
-                score = minimax(True)
-                board[i] = ' '
-                best_score = min(score, best_score)
-        return best_score
-
-def best_move():
-    best_score = -math.inf
-    move = 0
-    for i in range(9):
-        if board[i] == ' ':
-            board[i] = 'O'
-            score = minimax(False)
-            board[i] = ' '
-            if score > best_score:
-                best_score = score
-                move = i
-    return move
-
+# ------------------------
+# Routes
+# ------------------------
 @app.route('/')
 def index():
-    return render_template('index.html')
+    username = session.get('username', 'Guest')
+    return render_template('index.html', username=username)
 
 @app.route('/move', methods=['POST'])
 def move():
@@ -68,8 +37,8 @@ def move():
     board[player_move] = 'X'
 
     if is_winner('X'):
+        update_score('X')
         return jsonify({'winner': 'X'})
-
     if is_board_full():
         return jsonify({'winner': 'tie'})
 
@@ -77,11 +46,85 @@ def move():
     board[ai] = 'O'
 
     if is_winner('O'):
+        update_score('O')
         return jsonify({'ai_move': ai, 'winner': 'O'})
     elif is_board_full():
         return jsonify({'ai_move': ai, 'winner': 'tie'})
     
     return jsonify({'ai_move': ai, 'winner': None})
+
+@app.route('/restart', methods=['POST'])
+def restart():
+    global board
+    board = [' ' for _ in range(9)]
+    return jsonify({'status': 'ok'})
+
+# ------------------------
+# User Auth Routes
+# ------------------------
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = generate_password_hash(request.form['password'])
+        try:
+            conn = sqlite3.connect('users.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            return "Username already exists!"
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        conn = sqlite3.connect('users.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=?", (username,))
+        user = c.fetchone()
+        conn.close()
+        if user and check_password_hash(user[2], password):
+            session['username'] = username
+            return redirect(url_for('index'))
+        else:
+            return "Invalid credentials!"
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('index'))
+
+# ------------------------
+# Score update
+# ------------------------
+def update_score(winner):
+    if 'username' not in session or session['username'] == 'Guest':
+        return
+    if winner != 'X':
+        return  # Only track player score for now
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("UPDATE users SET score = score + 1 WHERE username=?", (session['username'],))
+    conn.commit()
+    conn.close()
+
+# ------------------------
+# Leaderboard
+# ------------------------
+@app.route('/leaderboard')
+def leaderboard():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT username, score FROM users ORDER BY score DESC")
+    data = c.fetchall()
+    conn.close()
+    return render_template('leaderboard.html', leaderboard=data)
 
 if __name__ == '__main__':
     app.run(debug=True)
