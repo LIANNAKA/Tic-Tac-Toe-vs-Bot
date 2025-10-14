@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-from TicTacToeVSBot import board, best_move, is_winner, is_board_full
+from tictactoevsbot import board, best_move, is_winner, is_board_full
 import math
 
 app = Flask(__name__)
