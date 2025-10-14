@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tic Tac Toe vs AI</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background-color: #f4f4f4;
+    }
+    h1 { color: #333; }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      gap: 10px;
+      justify-content: center;
+      margin-top: 50px;
+    }
+    .cell {
+      width: 100px;
+      height: 100px;
+      background-color: white;
+      border: 2px solid #444;
+      font-size: 2em;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+    }
+    .cell.taken {
+      cursor: not-allowed;
+      color: #777;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 1.2em;
+      color: #222;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tic Tac Toe vs AI</h1>
+  <div id="board"></div>
+  <p id="status"></p>
+
+  <script>
+    const boardDiv = document.getElementById("board");
+    const statusText = document.getElementById("status");
+
+    // Create board
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement("div");
+      cell.classList.add("cell");
+      cell.dataset.index = i;
+      cell.addEventListener("click", handleClick);
+      boardDiv.appendChild(cell);
+    }
+
+    async function handleClick(e) {
+      const cell = e.target;
+      const index = cell.dataset.index;
+
+      if (cell.classList.contains("taken")) return;
+
+      cell.textContent = "X";
+      cell.classList.add("taken");
+
+      const res = await fetch("/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ move: parseInt(index) }),
+      });
+
+      const data = await res.json();
+
+      if (data.winner === "X") {
+        statusText.textContent = "🎉 You win!";
+        disableBoard();
+      } else if (data.winner === "tie") {
+        statusText.textContent = "🤝 It's a tie!";
+        disableBoard();
+      } else {
+        // AI move
+        const aiCell = document.querySelector(`[data-index='${data.ai_move}']`);
+        aiCell.textContent = "O";
+        aiCell.classList.add("taken");
+
+        if (data.winner === "O") {
+          statusText.textContent = "🤖 AI wins!";
+          disableBoard();
+        }
+      }
+    }
+
+    function disableBoard() {
+      document.querySelectorAll(".cell").forEach(c => c.classList.add("taken"));
+    }
+  </script>
+</body>
+</html>
