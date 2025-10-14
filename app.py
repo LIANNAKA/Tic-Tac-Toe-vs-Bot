@@ -5,7 +5,7 @@ import sqlite3
 import math     
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
+app.secret_key = "your_secret_key"  # add this in .env file
 
 # ------------------------
 # User authentication DB
