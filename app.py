@@ -4,7 +4,7 @@ from tictactoevsbot import board, best_move, is_winner, is_board_full
 import sqlite3
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
+app.secret_key = "your_secret_key"  # add this in .env file
 
 # ------------------------
 # User authentication DB
