@@ -1,31 +1,6 @@
 import math
-import time
-from colorama import Fore, Style, init
-
-# Initialize colorama
-init(autoreset=True)
 
 board = [' ' for _ in range(9)]
-
-def print_board():
-    print("\nCurrent Board:")
-    for i in range(0, 9, 3):
-        # Apply colors
-        row = []
-        for j in range(3):
-            cell = board[i + j]
-            if cell == 'X':
-                row.append(Fore.CYAN + 'X' + Style.RESET_ALL)
-            elif cell == 'O':
-                row.append(Fore.MAGENTA + 'O' + Style.RESET_ALL)
-            else:
-                # Numbered positions for empty cells
-                row.append(Fore.YELLOW + str(i + j + 1) + Style.RESET_ALL)
-
-        print(f" {row[0]} | {row[1]} | {row[2]} ")
-        if i < 6:
-            print("---+---+---")
-    print()
 
 def is_winner(player):
     win_conditions = [
@@ -80,44 +55,3 @@ def best_move():
                 best_score = score
                 move = i
     return move
-
-def player_move():
-    while True:
-        try:
-            move = int(input(Fore.CYAN + 'Enter your move (1-9): ' + Style.RESET_ALL)) - 1
-            if move < 0 or move > 8:
-                print(Fore.RED + 'Invalid move. Choose between 1 and 9.' + Style.RESET_ALL)
-            elif board[move] != ' ':
-                print(Fore.RED + 'That spot is already taken. Try again.' + Style.RESET_ALL)
-            else:
-                board[move] = 'X'
-                break
-        except ValueError:
-            print(Fore.RED + 'Please enter a number between 1 and 9.' + Style.RESET_ALL)
-
-print(Fore.GREEN + "Welcome to Tic-tac-Toe! You are 'X' and AI is 'O'\n" + Style.RESET_ALL)
-print_board()
-
-while True:
-    player_move()
-    print_board()
-
-    if is_winner('X'):
-        print(Fore.CYAN + '🎉 You win!' + Style.RESET_ALL)
-        break
-    elif is_board_full():
-        print(Fore.YELLOW + "It's a tie!" + Style.RESET_ALL)
-        break
-
-    print(Fore.MAGENTA + "AI is making a move..." + Style.RESET_ALL)
-    time.sleep(1.5)
-    ai_move = best_move()
-    board[ai_move] = 'O'
-    print_board()
-
-    if is_winner('O'):
-        print(Fore.MAGENTA + '🤖 AI wins!' + Style.RESET_ALL)
-        break
-    elif is_board_full():
-        print(Fore.YELLOW + "It's a tie!" + Style.RESET_ALL)
-        break
