@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
-from tictactoevsbot import board, best_move, is_winner, is_board_full
+from tictactoevsbot import best_move, is_winner, is_board_full
 import sqlite3
 import math     
 
@@ -35,29 +35,45 @@ def index():
 def move():
     data = request.get_json()
     player_move = data['move']
+
+    # Initialize board if not in session
+    if 'board' not in session:
+        session['board'] = [' '] * 9
+
+    board = session['board']
+
+    if board[player_move] != ' ':
+        return jsonify({'error': 'Cell already taken!'})
+
     board[player_move] = 'X'
 
-    if is_winner('X'):
+    if is_winner(board, 'X'):
+        session['board'] = [' '] * 9  # reset after win
         update_score('X')
         return jsonify({'winner': 'X'})
-    if is_board_full():
+
+    if is_board_full(board):
+        session['board'] = [' '] * 9
         return jsonify({'winner': 'tie'})
 
-    ai = best_move()
+    ai = best_move(board)
     board[ai] = 'O'
 
-    if is_winner('O'):
+    if is_winner(board, 'O'):
+        session['board'] = [' '] * 9
         update_score('O')
         return jsonify({'ai_move': ai, 'winner': 'O'})
-    elif is_board_full():
+    elif is_board_full(board):
+        session['board'] = [' '] * 9
         return jsonify({'ai_move': ai, 'winner': 'tie'})
-    
+
+    session['board'] = board
     return jsonify({'ai_move': ai, 'winner': None})
+
 
 @app.route('/restart', methods=['POST'])
 def restart():
-    global board
-    board = [' ' for _ in range(9)]
+    session['board'] = [' '] * 9
     return jsonify({'status': 'ok'})
 
 # ------------------------
