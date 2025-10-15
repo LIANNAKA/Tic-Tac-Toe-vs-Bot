@@ -25,11 +25,14 @@ async function handleClick(e) {
     cell.classList.add("taken", "player");
     statusText.textContent = "🤖 AI is thinking...";
 
-    const res = await fetch("/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ move: parseInt(index) }),
-    });
+    const res = await fetch('/move', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        move: index,
+        difficulty: localStorage.getItem('difficulty') || 'hard'
+    })
+})
 
     const data = await res.json();
     handleGameResponse(data);
