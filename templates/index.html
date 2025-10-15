@@ -13,6 +13,16 @@
 
         <p class="username">Playing as: <span>{{ username }}</span></p>
 
+        <!-- Difficulty Level Selection -->
+        <div class="difficulty-select">
+            <label for="difficulty">Select Difficulty:</label>
+            <select id="difficulty" class="dropdown">
+                <option value="easy">🟢 Easy</option>
+                <option value="medium">🟠 Medium</option>
+                <option value="hard" selected>🔴 Hard</option>
+            </select>
+        </div>
+
         <div id="board" class="game-board">
             <!-- 9 cells will be dynamically created by script.js -->
         </div>
@@ -34,6 +44,15 @@
             {% endif %}
         </div>
     </div>
+
+    <script>
+        // Store difficulty selection in localStorage so it persists
+        const difficultySelect = document.getElementById('difficulty');
+        difficultySelect.value = localStorage.getItem('difficulty') || 'hard';
+        difficultySelect.addEventListener('change', () => {
+            localStorage.setItem('difficulty', difficultySelect.value);
+        });
+    </script>
 
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
