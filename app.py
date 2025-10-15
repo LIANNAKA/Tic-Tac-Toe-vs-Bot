@@ -3,6 +3,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from tictactoevsbot import best_move, is_winner, is_board_full
 import sqlite3
 import math     
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "users.db")
+print("Database path being used:", DB_PATH)
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key"  # add this in .env file
@@ -10,7 +14,7 @@ app.secret_key = "your_secret_key"  # add this in .env file
 # ------------------------
 # User authentication DB
 # ------------------------
-conn = sqlite3.connect('users.db')
+conn = sqlite3.connect(DB_PATH)
 c = conn.cursor()
 c.execute('''
 CREATE TABLE IF NOT EXISTS users (
@@ -85,7 +89,7 @@ def register():
         username = request.form['username']
         password = generate_password_hash(request.form['password'])
         try:
-            conn = sqlite3.connect('users.db')
+            conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
             conn.commit()
@@ -100,7 +104,7 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        conn = sqlite3.connect('users.db')
+        conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         c.execute("SELECT * FROM users WHERE username=?", (username,))
         user = c.fetchone()
@@ -125,7 +129,7 @@ def update_score(winner):
         return
     if winner != 'X':
         return  # Only track player score for now
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("UPDATE users SET score = score + 1 WHERE username=?", (session['username'],))
     conn.commit()
@@ -136,7 +140,7 @@ def update_score(winner):
 # ------------------------
 @app.route('/leaderboard')
 def leaderboard():
-    conn = sqlite3.connect('users.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT username, score FROM users ORDER BY score DESC")
     data = c.fetchall()
