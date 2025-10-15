@@ -3,15 +3,19 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from tictactoevsbot import best_move, is_winner, is_board_full
 import sqlite3
 import os
+
+# ------------------------
+# App Config
+# ------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "users.db")
 print("Database path being used:", DB_PATH)
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # add this in .env file
+app.secret_key = "your_secret_key"  # TODO: move this to .env for security
 
 # ------------------------
-# User authentication DB
+# Database Setup
 # ------------------------
 conn = sqlite3.connect(DB_PATH)
 c = conn.cursor()
@@ -32,14 +36,32 @@ conn.close()
 @app.route('/')
 def index():
     username = session.get('username', 'Guest')
-    return render_template('index.html', username=username)
+    difficulty = session.get('difficulty', 'medium')  # default medium
+    return render_template('index.html', username=username, difficulty=difficulty)
 
+# ------------------------
+# Difficulty Route
+# ------------------------
+@app.route('/set_difficulty/<level>')
+def set_difficulty(level):
+    level = level.lower()
+    if level not in ['easy', 'medium', 'hard']:
+        level = 'medium'
+    session['difficulty'] = level
+    return redirect(url_for('index'))
+
+# ------------------------
+# Game Move Route
+# ------------------------
 @app.route('/move', methods=['POST'])
 def move():
     data = request.get_json()
-    player_move = data['move']
+    player_move = int(data['move'])
 
-    # Initialize board if not in session
+    # Get difficulty (from session or request)
+    difficulty = data.get('difficulty', session.get('difficulty', 'medium'))
+
+    # Initialize board if not present
     if 'board' not in session:
         session['board'] = [' '] * 9
 
@@ -48,6 +70,7 @@ def move():
     if board[player_move] != ' ':
         return jsonify({'error': 'Cell already taken!'})
 
+    # Player move
     board[player_move] = 'X'
 
     if is_winner(board, 'X'):
@@ -59,7 +82,8 @@ def move():
         session['board'] = [' '] * 9
         return jsonify({'winner': 'tie'})
 
-    ai = best_move(board)
+    # AI Move (depends on difficulty)
+    ai = best_move(board, difficulty)
     board[ai] = 'O'
 
     if is_winner(board, 'O'):
@@ -73,14 +97,16 @@ def move():
     session['board'] = board
     return jsonify({'ai_move': ai, 'winner': None})
 
-
+# ------------------------
+# Restart Route
+# ------------------------
 @app.route('/restart', methods=['POST'])
 def restart():
     session['board'] = [' '] * 9
     return jsonify({'status': 'ok'})
 
 # ------------------------
-# User Auth Routes
+# User Authentication
 # ------------------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -110,6 +136,7 @@ def login():
         conn.close()
         if user and check_password_hash(user[2], password):
             session['username'] = username
+            session['difficulty'] = 'medium'  # default after login
             return redirect(url_for('index'))
         else:
             return "Invalid credentials!"
@@ -118,10 +145,11 @@ def login():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('difficulty', None)
     return redirect(url_for('index'))
 
 # ------------------------
-# Score update
+# Score Update
 # ------------------------
 def update_score(winner):
     if 'username' not in session or session['username'] == 'Guest':
@@ -146,5 +174,8 @@ def leaderboard():
     conn.close()
     return render_template('leaderboard.html', leaderboard=data)
 
+# ------------------------
+# Run App
+# ------------------------
 if __name__ == '__main__':
     app.run(debug=True)
