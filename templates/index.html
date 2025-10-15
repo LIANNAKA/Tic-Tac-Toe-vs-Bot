@@ -1,20 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tic Tac Toe vs AI</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Tic Tac Toe vs AI</h1>
-    <p>Playing as: {{ username }}</p>
-    <div id="board"></div>
-    <p id="status"></p>
-    <button id="restartBtn">Restart Game</button>
-    {% if username == 'Guest' %}
-        <a href="{{ url_for('login') }}">Login</a> | <a href="{{ url_for('register') }}">Register</a>
-    {% else %}
-        <a href="{{ url_for('logout') }}">Logout</a> | <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
-    {% endif %}
+    <div class="container">
+        <h1 class="title">Tic Tac Toe vs AI 🎮</h1>
+
+        <p class="username">Playing as: <span>{{ username }}</span></p>
+
+        <div id="board" class="game-board">
+            <!-- 9 cells will be dynamically created by script.js -->
+        </div>
+
+        <p id="status" class="status">Your turn!</p>
+
+        <div class="controls">
+            <button id="restartBtn" class="btn">🔁 Restart Game</button>
+            {% if username == 'Guest' %}
+                <div class="links">
+                    <a href="{{ url_for('login') }}">Login</a>
+                    <a href="{{ url_for('register') }}">Register</a>
+                </div>
+            {% else %}
+                <div class="links">
+                    <a href="{{ url_for('logout') }}">Logout</a>
+                    <a href="{{ url_for('leaderboard') }}">🏆 Leaderboard</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
