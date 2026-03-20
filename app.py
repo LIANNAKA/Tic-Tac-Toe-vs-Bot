@@ -3,12 +3,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from tictactoevsbot import best_move, is_winner, is_board_full
 import sqlite3
 import os
+import json
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-cred = credentials.Certificate("botvstictactoe-firebase-adminsdk-fbsvc-7d02dead3c.json") 
-# 👆 replace with your NEW file name
+firebase_key = os.environ.get("FIREBASE_KEY")
+
+if firebase_key is None:
+    raise ValueError("FIREBASE_KEY is not set!")
+
+cred = credentials.Certificate(json.loads(firebase_key))
 
 firebase_admin.initialize_app(cred)
 
