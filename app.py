@@ -1,63 +1,40 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from tictactoevsbot import best_move, is_winner, is_board_full
-import sqlite3
+from dotenv import load_dotenv
 import os
 import json
-
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-firebase_key = os.environ.get("FIREBASE_KEY")
+# ------------------------ Firebase Setup ------------------------
+load_dotenv()
 
-if firebase_key is None:
+firebase_key_str = os.environ.get("FIREBASE_KEY")
+if not firebase_key_str:
     raise ValueError("FIREBASE_KEY is not set!")
 
-cred = credentials.Certificate(json.loads(firebase_key))
+firebase_key = json.loads(firebase_key_str)
+cred = credentials.Certificate(firebase_key)
 
-firebase_admin.initialize_app(cred)
+# Initialize Firebase only if not already initialized
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
-
 print("🔥 Firebase connected!")
-# ------------------------
-# App Config
-# ------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "users.db")
-print("Database path being used:", DB_PATH)
 
+# ------------------------ App Config ------------------------
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # TODO: move this to .env for security
+app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret_key")
 
-# ------------------------
-# Database Setup
-# ------------------------
-conn = sqlite3.connect(DB_PATH)
-c = conn.cursor()
-c.execute('''
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    username TEXT UNIQUE,
-    password TEXT,
-    score INTEGER DEFAULT 0
-)
-''')
-conn.commit()
-conn.close()
-
-# ------------------------
-# Routes
-# ------------------------
+# ------------------------ Routes ------------------------
 @app.route('/')
 def index():
     username = session.get('username', 'Guest')
-    difficulty = session.get('difficulty', 'medium')  # default medium
+    difficulty = session.get('difficulty', 'medium')
     return render_template('index.html', username=username, difficulty=difficulty)
 
-# ------------------------
-# Difficulty Route
-# ------------------------
 @app.route('/set_difficulty/<level>')
 def set_difficulty(level):
     level = level.lower()
@@ -66,31 +43,24 @@ def set_difficulty(level):
     session['difficulty'] = level
     return redirect(url_for('index'))
 
-# ------------------------
-# Game Move Route
-# ------------------------
+# ------------------------ Game Move ------------------------
 @app.route('/move', methods=['POST'])
 def move():
     data = request.get_json()
     player_move = int(data['move'])
-
-    # Get difficulty (from session or request)
     difficulty = data.get('difficulty', session.get('difficulty', 'medium'))
 
-    # Initialize board if not present
     if 'board' not in session:
         session['board'] = [' '] * 9
-
     board = session['board']
 
     if board[player_move] != ' ':
         return jsonify({'error': 'Cell already taken!'})
 
-    # Player move
     board[player_move] = 'X'
 
     if is_winner(board, 'X'):
-        session['board'] = [' '] * 9  # reset after win
+        session['board'] = [' '] * 9
         update_score('X')
         return jsonify({'winner': 'X'})
 
@@ -98,7 +68,6 @@ def move():
         session['board'] = [' '] * 9
         return jsonify({'winner': 'tie'})
 
-    # AI Move (depends on difficulty)
     ai = best_move(board, difficulty)
     board[ai] = 'O'
 
@@ -113,49 +82,48 @@ def move():
     session['board'] = board
     return jsonify({'ai_move': ai, 'winner': None})
 
-# ------------------------
-# Restart Route
-# ------------------------
 @app.route('/restart', methods=['POST'])
 def restart():
     session['board'] = [' '] * 9
     return jsonify({'status': 'ok'})
 
-# ------------------------
-# User Authentication
-# ------------------------
+# ------------------------ User Authentication ------------------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = generate_password_hash(request.form['password'])
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            c = conn.cursor()
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-            conn.commit()
-            conn.close()
-            return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+
+        users_ref = db.collection('users')
+        user_doc = users_ref.document(username).get()
+        if user_doc.exists:
             return "Username already exists!"
+
+        # Save user with document ID = username
+        users_ref.document(username).set({
+            'password': password,
+            'score': 0
+        })
+
+        return redirect(url_for('login'))
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password']
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("SELECT * FROM users WHERE username=?", (username,))
-        user = c.fetchone()
-        conn.close()
-        if user and check_password_hash(user[2], password):
+        password_input = request.form['password']
+
+        users_ref = db.collection('users')
+        user_doc = users_ref.document(username).get()
+
+        if user_doc.exists and check_password_hash(user_doc.to_dict()['password'], password_input):
             session['username'] = username
-            session['difficulty'] = 'medium'  # default after login
+            session['difficulty'] = 'medium'
             return redirect(url_for('index'))
         else:
             return "Invalid credentials!"
+
     return render_template('login.html')
 
 @app.route('/logout')
@@ -164,34 +132,27 @@ def logout():
     session.pop('difficulty', None)
     return redirect(url_for('index'))
 
-# ------------------------
-# Score Update
-# ------------------------
+# ------------------------ Score Update ------------------------
 def update_score(winner):
     if 'username' not in session or session['username'] == 'Guest':
         return
     if winner != 'X':
-        return  # Only track player score for now
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE users SET score = score + 1 WHERE username=?", (session['username'],))
-    conn.commit()
-    conn.close()
+        return
 
-# ------------------------
-# Leaderboard
-# ------------------------
+    user_ref = db.collection('users').document(session['username'])
+    user_doc = user_ref.get()
+    if user_doc.exists:
+        current_score = user_doc.to_dict().get('score', 0)
+        user_ref.update({'score': current_score + 1})
+
+# ------------------------ Leaderboard ------------------------
 @app.route('/leaderboard')
 def leaderboard():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT username, score FROM users ORDER BY score DESC")
-    data = c.fetchall()
-    conn.close()
-    return render_template('leaderboard.html', leaderboard=data)
+    users_ref = db.collection('users')
+    query = users_ref.order_by('score', direction=firestore.Query.DESCENDING).stream()
+    leaderboard_data = [{'username': doc.id, 'score': doc.to_dict()['score']} for doc in query]
+    return render_template('leaderboard.html', leaderboard=leaderboard_data)
 
-# ------------------------
-# Run App
-# ------------------------
+# ------------------------ Run App ------------------------
 if __name__ == '__main__':
     app.run(debug=True)
