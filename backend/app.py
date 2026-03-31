@@ -29,7 +29,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret_key")
 
 # CORS (for React frontend)
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
+CORS(app, supports_credentials=True, origins=["http://localhost:5173","https://tic-tac-toe-vs-bot-1.onrender.com"])
 
 # ------------------------ Game Move (MAIN LOGIC) ------------------------
 @app.route('/move', methods=['POST'])
