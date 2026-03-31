@@ -1,6 +1,6 @@
 🎮 Tic Tac Toe vs AI Bot
 
-🔗 Live Demo: https://tic-tac-toe-vs-bot.onrender.com
+🔗 Live Demo: https://tic-tac-toe-vs-bot-1.onrender.com/
 
 An interactive web-based Tic Tac Toe game powered by an intelligent AI opponent built using the Minimax Algorithm. This project demonstrates core concepts of game theory, decision-making, and backend integration using Python.
 
