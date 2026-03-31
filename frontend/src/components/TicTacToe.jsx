@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 const initialBoard = Array(9).fill(null);
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
+const BACKEND_URL = "https://tic-tac-toe-vs-bot.onrender.com";
 
 // Decorative geometric elements
 const GeometricDecorations = () => {
