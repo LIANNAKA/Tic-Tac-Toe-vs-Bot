@@ -6,6 +6,7 @@ import os
 import json
 import firebase_admin
 from firebase_admin import credentials, firestore
+from flask_cors import CORS
 
 # ------------------------ Firebase Setup ------------------------
 load_dotenv()
@@ -17,7 +18,6 @@ if not firebase_key_str:
 firebase_key = json.loads(firebase_key_str)
 cred = credentials.Certificate(firebase_key)
 
-# Initialize Firebase only if not already initialized
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
@@ -28,64 +28,58 @@ print("🔥 Firebase connected!")
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret_key")
 
-# ------------------------ Routes ------------------------
-@app.route('/')
-def index():
-    username = session.get('username', 'Guest')
-    difficulty = session.get('difficulty', 'medium')
-    return render_template('index.html', username=username, difficulty=difficulty)
+# CORS (for React frontend)
+CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
 
-@app.route('/set_difficulty/<level>')
-def set_difficulty(level):
-    level = level.lower()
-    if level not in ['easy', 'medium', 'hard']:
-        level = 'medium'
-    session['difficulty'] = level
-    return redirect(url_for('index'))
-
-# ------------------------ Game Move ------------------------
+# ------------------------ Game Move (MAIN LOGIC) ------------------------
 @app.route('/move', methods=['POST'])
 def move():
     data = request.get_json()
+
+    username = data.get('username')
+    print("USERNAME RECEIVED:", username)
+
+    board = data.get('board')
+
+    # ✅ Normalize board
+    board = [cell if cell in ['X', 'O'] else ' ' for cell in board]
+
     player_move = int(data['move'])
-    difficulty = data.get('difficulty', session.get('difficulty', 'medium'))
+    difficulty = data.get('difficulty', 'medium')
 
-    if 'board' not in session:
-        session['board'] = [' '] * 9
-    board = session['board']
-
+    # Invalid move
     if board[player_move] != ' ':
-        return jsonify({'error': 'Cell already taken!'})
+        return jsonify({'error': 'Invalid move', 'board': board})
 
+    # Player move
     board[player_move] = 'X'
 
     if is_winner(board, 'X'):
-        session['board'] = [' '] * 9
-        update_score('X')
-        return jsonify({'winner': 'X'})
+        print("PLAYER WON DETECTED IN BACKEND")
+        update_score('X', username)
+        return jsonify({'winner': 'X', 'board': board})
 
     if is_board_full(board):
-        session['board'] = [' '] * 9
-        return jsonify({'winner': 'tie'})
+        return jsonify({'winner': 'tie', 'board': board})
 
+    # AI move
     ai = best_move(board, difficulty)
     board[ai] = 'O'
 
     if is_winner(board, 'O'):
-        session['board'] = [' '] * 9
-        update_score('O')
-        return jsonify({'ai_move': ai, 'winner': 'O'})
-    elif is_board_full(board):
-        session['board'] = [' '] * 9
-        return jsonify({'ai_move': ai, 'winner': 'tie'})
+        return jsonify({'winner': 'O', 'board': board})
 
-    session['board'] = board
-    return jsonify({'ai_move': ai, 'winner': None})
+    if is_board_full(board):
+        return jsonify({'winner': 'tie', 'board': board})
 
+    return jsonify({'winner': None, 'board': board})
+
+
+# ------------------------ Restart ------------------------
 @app.route('/restart', methods=['POST'])
 def restart():
-    session['board'] = [' '] * 9
-    return jsonify({'status': 'ok'})
+    return jsonify({'board': [' '] * 9})
+
 
 # ------------------------ User Authentication ------------------------
 @app.route('/register', methods=['GET', 'POST'])
@@ -96,63 +90,83 @@ def register():
 
         users_ref = db.collection('users')
         user_doc = users_ref.document(username).get()
+
         if user_doc.exists:
             return "Username already exists!"
 
-        # Save user with document ID = username
         users_ref.document(username).set({
             'password': password,
             'score': 0
         })
 
         return redirect(url_for('login'))
+
     return render_template('register.html')
 
-@app.route('/login', methods=['GET', 'POST'])
+
+@app.route('/login', methods=['POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password_input = request.form['password']
+    data = request.get_json()  # <-- Get JSON from React
 
-        users_ref = db.collection('users')
-        user_doc = users_ref.document(username).get()
+    username = data.get('username')
+    password_input = data.get('password')
 
-        if user_doc.exists and check_password_hash(user_doc.to_dict()['password'], password_input):
-            session['username'] = username
-            session['difficulty'] = 'medium'
-            return redirect(url_for('index'))
-        else:
-            return "Invalid credentials!"
+    if not username or not password_input:
+        return jsonify({'success': False, 'message': 'Username and password required'}), 400
 
-    return render_template('login.html')
+    users_ref = db.collection('users')
+    user_doc = users_ref.document(username).get()
+
+    if user_doc.exists and check_password_hash(user_doc.to_dict()['password'], password_input):
+        session['username'] = username
+        return jsonify({'success': True, 'message': 'Login successful'})
+    else:
+        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
 
 @app.route('/logout')
 def logout():
     session.pop('username', None)
-    session.pop('difficulty', None)
     return redirect(url_for('index'))
 
+
 # ------------------------ Score Update ------------------------
-def update_score(winner):
-    if 'username' not in session or session['username'] == 'Guest':
+def update_score(winner, username):
+    print("Updating score for:", username)
+
+    if not username:
+        print("No username, skipping")
         return
+
     if winner != 'X':
         return
 
-    user_ref = db.collection('users').document(session['username'])
+    user_ref = db.collection('users').document(username)
     user_doc = user_ref.get()
+
     if user_doc.exists:
         current_score = user_doc.to_dict().get('score', 0)
-        user_ref.update({'score': current_score + 1})
+        print("Current score:", current_score)
 
-# ------------------------ Leaderboard ------------------------
+        user_ref.update({'score': current_score + 1})
+        print("Score updated!")
+    else:
+        print("User not found!")
+
+
+# ------------------------ Leaderboard (optional HTML route) ------------------------
 @app.route('/leaderboard')
 def leaderboard():
     users_ref = db.collection('users')
     query = users_ref.order_by('score', direction=firestore.Query.DESCENDING).stream()
-    leaderboard_data = [{'username': doc.id, 'score': doc.to_dict()['score']} for doc in query]
+
+    leaderboard_data = [
+        {'username': doc.id, 'score': doc.to_dict()['score']}
+        for doc in query
+    ]
+
     return render_template('leaderboard.html', leaderboard=leaderboard_data)
 
-# ------------------------ Run App ------------------------
+
+# ------------------------ Run ------------------------
 if __name__ == '__main__':
     app.run(debug=True)
